@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Pml-course-project : In this repository I upload the files correponding to the PML course project">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Pml-course-project</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/stefanovisi/PML-Course-Project">View on GitHub</a>
+
+          <h1 id="project_title">Pml-course-project</h1>
+          <h2 id="project_tagline">In this repository I upload the files correponding to the PML course project</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/stefanovisi/PML-Course-Project/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/stefanovisi/PML-Course-Project/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <hr>
+
+<p>title: "Classifying weight lifting stiles"</p>
+
+<p>date: "Friday, November 21, 2014"</p>
+
+<h2>
+<a id="output-html_document" class="anchor" href="#output-html_document" aria-hidden="true"><span class="octicon octicon-link"></span></a>output: html_document</h2>
+
+<h2>
+<a id="a-predictive-analysis-to-classify-weight-lifting-styles-using-body-sensors-data-" class="anchor" href="#a-predictive-analysis-to-classify-weight-lifting-styles-using-body-sensors-data-" aria-hidden="true"><span class="octicon octicon-link"></span></a>A predictive analysis to classify weight lifting styles using body sensors data </h2>
+
+<p>As you know, dear colleague, this is the report where I describe all the analysis implemented in order to classify and predict the weight lifting style of 6 subjects who performed this exercise in 5 different ways and wearing body sensor which registered the data this analysis is based on. The whole process is described in detail (I hope), the aim is to show it step by step and drive through all the choices that have been made to solve the problem.</p>
+
+<p>I start loading the basic training dataset</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#downloading and loading training ds</span>
+setwd (<span class="pl-s1"><span class="pl-pds">"</span>C:/Users/stefano/Dropbox/cursera/Practical Machine Learning/Course Project<span class="pl-pds">"</span></span>)
+<span class="pl-vo">training</span> <span class="pl-k">&lt;-</span> read.csv(<span class="pl-s1"><span class="pl-pds">"</span>./data/training.csv<span class="pl-pds">"</span></span>)</pre></div>
+
+<p>I also load all the packages I will need</p>
+
+<div class="highlight highlight-r"><pre>library(<span class="pl-vo">caret</span>)
+library(<span class="pl-vo">rpart</span>)
+library(<span class="pl-vo">randomForest</span>)</pre></div>
+
+<p>The dependent variable of my model, the one I want to predict, is the lifting style of the subjects. There are 5 different classes of weigth lifting.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#Table of the classe variable</span>
+round(prop.table(table(<span class="pl-vo">training</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)), <span class="pl-v">digits</span><span class="pl-k">=</span><span class="pl-c1">2</span>)</pre></div>
+
+<p><strong>Data procesing</strong></p>
+
+<p>I observe that several variables read as factors, are actually numeric. The reason they're read as factors is that they present some missing values not recognised as such by R, in particular they have a lot of "" and "#DIV/0!".</p>
+
+<p>I do something that migth not seem odd in a course, but it is everyday practice when dealing with large dataset: I "clean" the dataset removing "" and "#DIV/0!" before loading them in R (I just do it in a normal Notepad)
+I'm sorry if this is not reproducible, but I give my word it's not a trick ;) just a regular way of processing data</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">training</span> <span class="pl-k">&lt;-</span> read.csv(<span class="pl-s1"><span class="pl-pds">"</span>./data/training_clean2.csv<span class="pl-pds">"</span></span>)</pre></div>
+
+<p>Some further data processing is needed. 
+Here are some variables I wish to remove:
+X is just an id
+user_name coluld lead to overfitting
+time could also lead to overfitting
+some other variables loaded as logic vectors</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">training</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">training</span>[,<span class="pl-k">!</span>(names(<span class="pl-vo">training</span>) <span class="pl-k">%in%</span> c(<span class="pl-s1"><span class="pl-pds">"</span>X<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>user_name<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_belt<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_belt<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_dumbbell<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_dumbbell<span class="pl-pds">"</span></span>,
+                         <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_forearm<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_forearm<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>cvtd_timestamp<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>new_window<span class="pl-pds">"</span></span>))]
+</pre></div>
+
+<p>Furthermore I want to remove all variables that seem to represent more "noise" than "signal". For this reason I drop all variables with more than 95% of NA values.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">training</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">training</span>[,colSums(is.na(<span class="pl-vo">training</span>))<span class="pl-k">&lt;</span><span class="pl-c1">0.95</span><span class="pl-k">*</span>nrow(<span class="pl-vo">training</span>)]</pre></div>
+
+<p>At this point I'm handling a dataset of 56 variables. We can do better and further reduce the number of variables (almost) without loosing information. I can apply Principal Component Analysis. Indeed, as you can see below, some of the variables are correlated.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">Cor</span> <span class="pl-k">&lt;-</span> abs(cor(<span class="pl-vo">training</span>[,<span class="pl-k">-</span><span class="pl-c1">56</span>]))
+diag(<span class="pl-vo">Cor</span>) <span class="pl-k">&lt;-</span> <span class="pl-c1">0</span> <span class="pl-c">#set diagonal values to 0</span>
+which(<span class="pl-vo">Cor</span> <span class="pl-k">&gt;</span> <span class="pl-c1">0.8</span>, <span class="pl-v">arr.ind</span><span class="pl-k">=</span><span class="pl-c1">T</span>)<span class="pl-c">#I see that there are quite a lot highly correlated numerical variables</span>
+<span class="pl-vo">pp</span> <span class="pl-k">&lt;-</span> preProcess(<span class="pl-vo">training</span>[,<span class="pl-k">-</span><span class="pl-c1">56</span>], <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>pca<span class="pl-pds">"</span></span>, <span class="pl-v">thresh</span> <span class="pl-k">=</span> <span class="pl-c1">0.99</span>)
+<span class="pl-vo">trainingPC</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">pp</span>,<span class="pl-vo">training</span>[,<span class="pl-k">-</span><span class="pl-c1">56</span>] )<span class="pl-c">#from 56 to 38 variables keeping 99% of the variance</span>
+<span class="pl-vo">trainingPC</span> <span class="pl-k">&lt;-</span> cbind(<span class="pl-vo">trainingPC</span>, <span class="pl-vo">training</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)
+names(<span class="pl-vo">trainingPC</span>) <span class="pl-k">&lt;-</span> c(names(<span class="pl-vo">trainingPC</span>)[<span class="pl-c1">1</span><span class="pl-k">:</span><span class="pl-c1">38</span>], <span class="pl-s1"><span class="pl-pds">"</span>classe<span class="pl-pds">"</span></span>)</pre></div>
+
+<p>After the data processing I end up with a dataset of 39 variables (the variable I want to predict and 38 predictors) out of 160.</p>
+
+<p>A step to reduce the number of cases on which the model will be trained. The initial 19622 cases slow the proces quite a bit. </p>
+
+<div class="highlight highlight-r"><pre>set.seed(<span class="pl-c1">1</span>)
+<span class="pl-vo">trainingPC_sm</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">trainingPC</span>[sample(nrow(<span class="pl-vo">trainingPC</span>), dim(<span class="pl-vo">trainingPC</span>)[<span class="pl-c1">1</span>]<span class="pl-k">*</span>.<span class="pl-c1">30</span>), ]<span class="pl-c"># 30% sample</span></pre></div>
+
+<p>Finally I split the dataset into 2 components (70% training, 30% testing)</p>
+
+<div class="highlight highlight-r"><pre>set.seed(<span class="pl-c1">2</span>)
+<span class="pl-v">inTrain</span> <span class="pl-k">=</span> createDataPartition(<span class="pl-vo">trainingPC_sm</span><span class="pl-k">$</span><span class="pl-vo">classe</span>, <span class="pl-v">p</span> <span class="pl-k">=</span> <span class="pl-c1">0.7</span>)[[<span class="pl-c1">1</span>]]
+<span class="pl-v">trainingPC_sm_tr</span> <span class="pl-k">=</span> <span class="pl-vo">trainingPC_sm</span>[ <span class="pl-vo">inTrain</span>,]
+<span class="pl-v">trainingPC_sm_ts</span> <span class="pl-k">=</span> <span class="pl-vo">trainingPC_sm</span>[<span class="pl-k">-</span><span class="pl-vo">inTrain</span>,]</pre></div>
+
+<p><strong>How I built the model</strong></p>
+
+<p>Time to train models!
+I will try 3 different models.The first is a simple tree. The second is a tree with some data processing and a cross validation. The third will be a random forest. </p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">tree1</span> <span class="pl-k">&lt;-</span> train(<span class="pl-vo">classe</span><span class="pl-k">~</span>., <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>rpart<span class="pl-pds">"</span></span>, <span class="pl-v">data</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>)
+<span class="pl-vo">tree2</span> <span class="pl-k">&lt;-</span> train(<span class="pl-vo">classe</span><span class="pl-k">~</span>., <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>rpart<span class="pl-pds">"</span></span>, <span class="pl-v">preProcess</span><span class="pl-k">=</span>c(<span class="pl-s1"><span class="pl-pds">"</span>center<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>scale<span class="pl-pds">"</span></span>), <span class="pl-v">trControl</span><span class="pl-k">=</span>trainControl(<span class="pl-v">method</span> <span class="pl-k">=</span> <span class="pl-s1"><span class="pl-pds">"</span>cv<span class="pl-pds">"</span></span>, <span class="pl-v">number</span> <span class="pl-k">=</span> <span class="pl-c1">4</span>), <span class="pl-v">data</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>)
+<span class="pl-vo">forest</span> <span class="pl-k">&lt;-</span> randomForest(<span class="pl-vo">classe</span><span class="pl-k">~</span>., <span class="pl-v">importance</span><span class="pl-k">=</span><span class="pl-c1">TRUE</span>, <span class="pl-v">method</span><span class="pl-k">=</span><span class="pl-s1"><span class="pl-pds">"</span>rf<span class="pl-pds">"</span></span>,<span class="pl-v">data</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>,<span class="pl-v">ntree</span><span class="pl-k">=</span><span class="pl-c1">500</span>)</pre></div>
+
+<p>To understand how these three model perform I will look at their Accuracy. First at the in-training accuracy</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#In training predictions</span>
+<span class="pl-vo">tree1pred</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">tree1</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>)
+<span class="pl-vo">tree2pred</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">tree2</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>)
+<span class="pl-vo">forestpred</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">forest</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_tr</span>)
+confusionMatrix(<span class="pl-vo">tree1pred</span>, <span class="pl-vo">trainingPC_sm_tr</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)
+confusionMatrix(<span class="pl-vo">tree2pred</span>, <span class="pl-vo">trainingPC_sm_tr</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)
+confusionMatrix(<span class="pl-vo">forestpred</span>, <span class="pl-vo">trainingPC_sm_tr</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)</pre></div>
+
+<p>Well, both trees seem to work the same way. They actually have the same (low) accuracy: 37.2%
+The forest is doing pretty well, a 100% of in-training accuracy.</p>
+
+<p><strong>Expected out of the sample error</strong></p>
+
+<p>We know that in-training accuracy is not a good measure. Therefore I test the models on a testing set.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-c">#In training.testing predictions</span>
+<span class="pl-vo">tree1pred.te</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">tree1</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_ts</span>)
+<span class="pl-vo">tree2pred.te</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">tree2</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_ts</span>)
+<span class="pl-vo">forestpred.te</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">forest</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">trainingPC_sm_ts</span>)
+confusionMatrix(<span class="pl-vo">tree1pred.te</span>, <span class="pl-vo">trainingPC_sm_ts</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)
+confusionMatrix(<span class="pl-vo">tree2pred.te</span>, <span class="pl-vo">trainingPC_sm_ts</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)
+confusionMatrix(<span class="pl-vo">forestpred.te</span>, <span class="pl-vo">trainingPC_sm_ts</span><span class="pl-k">$</span><span class="pl-vo">classe</span>)</pre></div>
+
+<p>Both trees are definitely the same, with an out of sample Accuracy of 36.3%.
+They are not able to predict classe B and C.
+The Random Forest estimation is predicting definitely better with an accuracy of 92.3% and a Kappa of 90%.</p>
+
+<p>The random forest is the chosen prediction.</p>
+
+<p><strong>Final prediction</strong></p>
+
+<p>Finally I apply the model to the test set we were given and do my prediction.
+I need to load and transform the test dataset the same way I did with the training one, with a particular attention to the PCA analysis.</p>
+
+<div class="highlight highlight-r"><pre><span class="pl-vo">test</span> <span class="pl-k">&lt;-</span> read.csv(<span class="pl-s1"><span class="pl-pds">"</span>./data/test_clean.csv<span class="pl-pds">"</span></span>)
+<span class="pl-vo">test</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">test</span>[,<span class="pl-k">!</span>(names(<span class="pl-vo">test</span>) <span class="pl-k">%in%</span> c(<span class="pl-s1"><span class="pl-pds">"</span>X<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>user_name<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_belt<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_belt<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_dumbbell<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_dumbbell<span class="pl-pds">"</span></span>,
+                                               <span class="pl-s1"><span class="pl-pds">"</span>kurtosis_yaw_forearm<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>skewness_yaw_forearm<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>cvtd_timestamp<span class="pl-pds">"</span></span>, <span class="pl-s1"><span class="pl-pds">"</span>new_window<span class="pl-pds">"</span></span>))]
+<span class="pl-vo">test</span> <span class="pl-k">&lt;-</span> <span class="pl-vo">test</span>[,colSums(is.na(<span class="pl-vo">test</span>))<span class="pl-k">&lt;</span><span class="pl-c1">0.95</span><span class="pl-k">*</span>nrow(<span class="pl-vo">test</span>)]
+<span class="pl-vo">testPC</span> <span class="pl-k">&lt;-</span> predict(<span class="pl-vo">pp</span>,<span class="pl-vo">test</span>[,<span class="pl-k">-</span><span class="pl-c1">56</span>] )</pre></div>
+
+<p>AND MY PREDICTION IS</p>
+
+<div class="highlight highlight-r"><pre>print(predict(<span class="pl-vo">forest</span>, <span class="pl-v">newdata</span><span class="pl-k">=</span><span class="pl-vo">testPC</span>))</pre></div>
+
+<p><strong>THANK YOU</strong></p>
+
+<p>...and sorry for typos...</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Pml-course-project maintained by <a href="https://github.com/stefanovisi">stefanovisi</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
