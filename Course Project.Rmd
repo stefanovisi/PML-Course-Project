@@ -1,0 +1,164 @@
+---
+title: "Classifying weight lifting stiles"
+
+date: "Friday, November 21, 2014"
+output: html_document
+---
+A predictive analysis to classify weight lifting styles using body sensors data 
+------------------------------------------------------------------------------------
+
+As you know, dear colleague, this is the report where I describe all the analysis implemented in order to classify and predict the weight lifting style of 6 subjects who performed this exercise in 5 different ways and wearing body sensor which registered the data this analysis is based on. The whole process is described in detail (I hope), the aim is to show it step by step and drive through all the choices that have been made to solve the problem.
+
+I start loading the basic training dataset
+
+````{r}
+#downloading and loading training ds
+setwd ("C:/Users/stefano/Dropbox/cursera/Practical Machine Learning/Course Project")
+training <- read.csv("./data/training.csv")
+```
+
+I also load all the packages I will need
+````{r}
+library(caret)
+library(rpart)
+library(randomForest)
+````
+
+The dependent variable of my model, the one I want to predict, is the lifting style of the subjects. There are 5 different classes of weigth lifting.
+````{r}
+#Table of the classe variable
+round(prop.table(table(training$classe)), digits=2)
+````
+
+
+**Data procesing**
+
+I observe that several variables read as factors, are actually numeric. The reason they're read as factors is that they present some missing values not recognised as such by R, in particular they have a lot of "" and "#DIV/0!".
+
+I do something that migth not seem odd in a course, but it is everyday practice when dealing with large dataset: I "clean" the dataset removing "" and "#DIV/0!" before loading them in R (I just do it in a normal Notepad)
+I'm sorry if this is not reproducible, but I give my word it's not a trick ;) just a regular way of processing data
+
+````{r}
+training <- read.csv("./data/training_clean2.csv")
+```
+
+Some further data processing is needed. 
+Here are some variables I wish to remove:
+X is just an id
+user_name coluld lead to overfitting
+time could also lead to overfitting
+some other variables loaded as logic vectors
+
+````{r}
+training <- training[,!(names(training) %in% c("X", "user_name", "kurtosis_yaw_belt", "skewness_yaw_belt", "kurtosis_yaw_dumbbell", "skewness_yaw_dumbbell",
+                         "kurtosis_yaw_forearm", "skewness_yaw_forearm", "cvtd_timestamp", "new_window"))]
+
+```
+
+Furthermore I want to remove all variables that seem to represent more "noise" than "signal". For this reason I drop all variables with more than 95% of NA values.
+````{r}
+training <- training[,colSums(is.na(training))<0.95*nrow(training)]
+```
+
+At this point I'm handling a dataset of 56 variables. We can do better and further reduce the number of variables (almost) without loosing information. I can apply Principal Component Analysis. Indeed, as you can see below, some of the variables are correlated.
+
+````{r}
+Cor <- abs(cor(training[,-56]))
+diag(Cor) <- 0 #set diagonal values to 0
+which(Cor > 0.8, arr.ind=T)#I see that there are quite a lot highly correlated numerical variables
+pp <- preProcess(training[,-56], method="pca", thresh = 0.99)
+trainingPC <- predict(pp,training[,-56] )#from 56 to 38 variables keeping 99% of the variance
+trainingPC <- cbind(trainingPC, training$classe)
+names(trainingPC) <- c(names(trainingPC)[1:38], "classe")
+```
+
+After the data processing I end up with a dataset of 39 variables (the variable I want to predict and 38 predictors) out of 160.
+
+A step to reduce the number of cases on which the model will be trained. The initial 19622 cases slow the proces quite a bit. 
+
+````{r}
+set.seed(1)
+trainingPC_sm <- trainingPC[sample(nrow(trainingPC), dim(trainingPC)[1]*.30), ]# 30% sample
+````
+
+Finally I split the dataset into 2 components (70% training, 30% testing)
+````{r}
+set.seed(2)
+inTrain = createDataPartition(trainingPC_sm$classe, p = 0.7)[[1]]
+trainingPC_sm_tr = trainingPC_sm[ inTrain,]
+trainingPC_sm_ts = trainingPC_sm[-inTrain,]
+````
+
+
+
+**How I built the model**
+
+Time to train models!
+I will try 3 different models.The first is a simple tree. The second is a tree with some data processing and a cross validation. The third will be a random forest. 
+
+````{r}
+tree1 <- train(classe~., method="rpart", data=trainingPC_sm_tr)
+tree2 <- train(classe~., method="rpart", preProcess=c("center", "scale"), trControl=trainControl(method = "cv", number = 4), data=trainingPC_sm_tr)
+forest <- randomForest(classe~., importance=TRUE, method="rf",data=trainingPC_sm_tr,ntree=500)
+````
+
+
+To understand how these three model perform I will look at their Accuracy. First at the in-training accuracy
+
+````{r}
+#In training predictions
+tree1pred <- predict(tree1, newdata=trainingPC_sm_tr)
+tree2pred <- predict(tree2, newdata=trainingPC_sm_tr)
+forestpred <- predict(forest, newdata=trainingPC_sm_tr)
+confusionMatrix(tree1pred, trainingPC_sm_tr$classe)
+confusionMatrix(tree2pred, trainingPC_sm_tr$classe)
+confusionMatrix(forestpred, trainingPC_sm_tr$classe)
+````
+
+Well, both trees seem to work the same way. They actually have the same (low) accuracy: 37.2%
+The forest is doing pretty well, a 100% of in-training accuracy.
+
+**Expected out of the sample error**
+
+We know that in-training accuracy is not a good measure. Therefore I test the models on a testing set.
+
+````{r}
+#In training.testing predictions
+tree1pred.te <- predict(tree1, newdata=trainingPC_sm_ts)
+tree2pred.te <- predict(tree2, newdata=trainingPC_sm_ts)
+forestpred.te <- predict(forest, newdata=trainingPC_sm_ts)
+confusionMatrix(tree1pred.te, trainingPC_sm_ts$classe)
+confusionMatrix(tree2pred.te, trainingPC_sm_ts$classe)
+confusionMatrix(forestpred.te, trainingPC_sm_ts$classe)
+````
+
+Both trees are definitely the same, with an out of sample Accuracy of 36.3%.
+They are not able to predict classe B and C.
+The Random Forest estimation is predicting definitely better with an accuracy of 92.3% and a Kappa of 90%.
+
+The random forest is the chosen prediction.
+
+**Final prediction**
+
+Finally I apply the model to the test set we were given and do my prediction.
+I need to load and transform the test dataset the same way I did with the training one, with a particular attention to the PCA analysis.
+
+````{r}
+test <- read.csv("./data/test_clean.csv")
+test <- test[,!(names(test) %in% c("X", "user_name", "kurtosis_yaw_belt", "skewness_yaw_belt", "kurtosis_yaw_dumbbell", "skewness_yaw_dumbbell",
+                                               "kurtosis_yaw_forearm", "skewness_yaw_forearm", "cvtd_timestamp", "new_window"))]
+test <- test[,colSums(is.na(test))<0.95*nrow(test)]
+testPC <- predict(pp,test[,-56] )
+````
+
+AND MY PREDICTION IS
+
+
+````{r}
+print(predict(forest, newdata=testPC))
+````
+
+**THANK YOU**
+
+...and sorry for typos...
+
